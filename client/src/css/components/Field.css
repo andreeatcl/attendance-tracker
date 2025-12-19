@@ -1,0 +1,33 @@
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.input {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 140ms ease, filter 140ms ease;
+}
+
+.input:hover {
+  filter: brightness(0.99);
+}
+
+.input-code {
+  font-size: 18px;
+  letter-spacing: 2px;
+  font-weight: 700;
+}
