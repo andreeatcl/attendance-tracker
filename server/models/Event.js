@@ -11,8 +11,13 @@ const Event = sequelize.define(
     },
     groupId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
-      field: "group_id",
+      allowNull: true,
+      field: "groupId",
+    },
+    organizerId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: "organizerId",
     },
     accessCode: {
       type: DataTypes.STRING,
@@ -36,14 +41,15 @@ const Event = sequelize.define(
     },
     status: {
       type: DataTypes.STRING,
-      defaultValue: "FUTURE",
+      defaultValue: "CLOSED",
+      allowNull: false,
       validate: {
-        isIn: [["OPEN", "CLOSED", "FUTURE"]],
+        isIn: [["OPEN", "CLOSED"]],
       },
     },
   },
   {
-    underscored: true,
+    underscored: false,
   }
 );
 

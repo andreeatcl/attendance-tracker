@@ -2,21 +2,28 @@ const express = require("express");
 const { authRequired } = require("../middleware/auth");
 const { requireRole } = require("../middleware/requireRole");
 const {
-  setEventStatus,
+  listStandaloneEvents,
+  createStandaloneEvent,
   getEventByCode,
   listAttendance,
 } = require("../controllers/eventController");
 
 const router = express.Router();
 
-router.get("/code/:code", authRequired, getEventByCode);
-
-router.patch(
-  "/:eventId/status",
+router.get(
+  "/standalone",
   authRequired,
   requireRole("organizer"),
-  setEventStatus
+  listStandaloneEvents
 );
+router.post(
+  "/standalone",
+  authRequired,
+  requireRole("organizer"),
+  createStandaloneEvent
+);
+
+router.get("/code/:code", authRequired, getEventByCode);
 router.get(
   "/:eventId/attendance",
   authRequired,

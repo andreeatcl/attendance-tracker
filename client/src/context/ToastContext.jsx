@@ -6,23 +6,33 @@ export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const timersRef = useRef(new Map());
 
+  function clearAllTimers() {
+    for (const t of timersRef.current.values()) clearTimeout(t);
+    timersRef.current.clear();
+  }
+
   function removeToast(id) {
-    const timers = timersRef.current;
-    const t = timers.get(id);
-    if (t) {
-      clearTimeout(t);
-      timers.delete(id);
-    }
+    clearAllTimers();
     setToasts((prev) => prev.filter((x) => x.id !== id));
   }
 
   function showToast(message, type = "info", timeoutMs = 2500) {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const toast = { id, message: String(message || ""), type };
-    setToasts((prev) => [...prev, toast]);
+    const toast = { id, message: String(message || ""), type, leaving: false };
 
-    const t = setTimeout(() => removeToast(id), timeoutMs);
-    timersRef.current.set(id, t);
+    clearAllTimers();
+    setToasts([toast]);
+
+    const leaveMs = Math.max(0, Number(timeoutMs) - 220);
+    const leaveTimer = setTimeout(() => {
+      setToasts((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, leaving: true } : t))
+      );
+    }, leaveMs);
+    const removeTimer = setTimeout(() => removeToast(id), timeoutMs);
+
+    timersRef.current.set(`${id}:leave`, leaveTimer);
+    timersRef.current.set(`${id}:remove`, removeTimer);
 
     return id;
   }
@@ -36,7 +46,7 @@ export function ToastProvider({ children }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`toast toast-${t.type}`}
+            className={`toast toast-${t.type} ${t.leaving ? "is-leaving" : ""}`}
             role="status"
             onClick={() => removeToast(t.id)}
           >

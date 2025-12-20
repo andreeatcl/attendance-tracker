@@ -1,32 +1,71 @@
 .toast-host {
   position: fixed;
-  right: 16px;
-  top: calc(var(--nav-height) + 16px);
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: 10px;
   z-index: 50;
+  pointer-events: none;
 }
 
 .toast {
-  max-width: min(360px, calc(100vw - 32px));
+  pointer-events: auto;
+  width: min(520px, calc(100vw - 32px));
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  transform: translateY(12px);
+  opacity: 0;
+  animation: toast-in 180ms ease forwards;
+}
+
+.toast.is-leaving {
+  animation: toast-out 180ms ease forwards;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-out {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(14px);
+    opacity: 0;
+  }
 }
 
 .toast-info {
   border-color: var(--border);
+  color: var(--surface);
 }
 
 .toast-success {
-  border-color: var(--success-border);
+  border-color: rgba(33, 192, 156, 0.35);
+  background-color: var(--success);
+  color: var(--surface);
 }
 
 .toast-error {
-  border-color: var(--danger-border);
+  border-color: rgba(220, 38, 38, 0.25);
+  background-color: var(--danger);
+  color: var(--surface);
 }

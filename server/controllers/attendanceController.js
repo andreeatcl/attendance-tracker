@@ -1,4 +1,5 @@
 const { Event, Attendance } = require("../models");
+const { getEventWindowStatus } = require("../utils/eventWindow");
 
 async function checkIn(req, res) {
   const { code } = req.body || {};
@@ -7,7 +8,7 @@ async function checkIn(req, res) {
     .toUpperCase();
 
   if (!accessCode) {
-    return res.status(400).json({ message: "code is required" });
+    return res.status(400).json({ message: "Code is required" });
   }
 
   const event = await Event.findOne({ where: { accessCode } });
@@ -15,8 +16,17 @@ async function checkIn(req, res) {
     return res.status(404).json({ message: "Event not found" });
   }
 
-  if (event.status !== "OPEN") {
-    return res.status(400).json({ message: "Event is not OPEN" });
+  const { isOpen, status } = getEventWindowStatus(event);
+
+  if (event.status !== status) {
+    try {
+      event.status = status;
+      await event.save();
+    } catch {}
+  }
+
+  if (!isOpen) {
+    return res.status(400).json({ message: "Event is CLOSED" });
   }
 
   const [attendance, created] = await Attendance.findOrCreate({
@@ -29,7 +39,7 @@ async function checkIn(req, res) {
     event: {
       id: event.id,
       accessCode: event.accessCode,
-      status: event.status,
+      status,
     },
     attendance: {
       id: attendance.id,

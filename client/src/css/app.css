@@ -11,5 +11,6 @@
 @import "./components/Table.css";
 @import "./components/Text.css";
 @import "./components/AuthPage.css";
+@import "./components/HomePage.css";
 @import "./components/EventPreview.css";
 @import "./components/Toast.css";

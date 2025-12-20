@@ -1,18 +1,27 @@
 :root {
-  --primary-color: #2563eb;
+  --primary-color: #0062f2;
 
-  --nav-height: 60px;
+  --nav-height: 70px;
+  --nav-bg: rgba(251, 253, 255, 0.78);
+  --nav-border: rgba(226, 232, 240, 0.85);
+  --nav-shadow: 0 1px 0 rgba(15, 23, 42, 0.03),
+    0 8px 18px rgba(15, 23, 42, 0.06);
 
-  --bg: #f5f1e3;
+  --bg: #b6d8fa;
+  --bg-gradient: linear-gradient(
+    90deg,
+    rgba(182, 216, 250, 0.75) 0%,
+    rgba(209, 255, 245, 0.75) 100%
+  );
   --bg-subtle: #f8fafc;
-  --surface: #ffffff;
+  --surface: #fbfdff;
 
   --text: #0f172a;
   --muted: #475569;
 
   --border: #e2e8f0;
   --danger: #e55812;
-  --success: #16a34a;
+  --success: #21c09c;
 
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 10px 30px rgba(15, 23, 42, 0.08);
 }

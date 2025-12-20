@@ -1,14 +1,25 @@
 const { EventGroup, Event, Attendance, User } = require("../models");
 const { generateAccessCode } = require("../utils/accessCode");
+const { getEventWindowStatus } = require("../utils/eventWindow");
 
 function parseStartTime(value) {
   if (value instanceof Date) return value;
   const raw = String(value || "").trim();
   if (!raw) return null;
 
-  // Accept both "YYYY-MM-DDTHH:mm" and "YYYY-MM-DD HH:mm".
-  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
-  const dt = new Date(normalized);
+  const m = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+  if (!m) return null;
+
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = m[6] ? Number(m[6]) : 0;
+
+  const dt = new Date(year, month - 1, day, hour, minute, second, 0);
   if (Number.isNaN(dt.getTime())) return null;
   return dt;
 }
@@ -32,7 +43,23 @@ async function listEventsForGroup(req, res) {
     order: [["id", "DESC"]],
   });
 
-  return res.json({ group, events });
+  return res.json({
+    group,
+    events: events.map((event) => {
+      const { isOpen, status, endTime } = getEventWindowStatus(event);
+      return {
+        id: event.id,
+        groupId: event.groupId,
+        accessCode: event.accessCode,
+        name: event.name,
+        startTime: event.startTime,
+        duration: event.duration,
+        endTime,
+        isOpen,
+        status,
+      };
+    }),
+  });
 }
 
 async function createEvent(req, res) {
@@ -62,50 +89,102 @@ async function createEvent(req, res) {
   }
 
   let accessCode = generateAccessCode(6);
-  // ensure uniqueness (best-effort)
-  // eslint-disable-next-line no-await-in-loop
   while (await Event.findOne({ where: { accessCode } })) {
     accessCode = generateAccessCode(6);
   }
 
   const event = await Event.create({
     groupId,
+    organizerId: group.organizerId,
     accessCode,
     name: String(name).trim(),
     startTime: parsedStart,
     duration: Number(duration),
-    status: "FUTURE",
+    status: getEventWindowStatus({ startTime: parsedStart, duration }).status,
   });
 
-  return res.status(201).json({ event });
+  const { isOpen, status, endTime } = getEventWindowStatus(event);
+  return res.status(201).json({
+    event: {
+      id: event.id,
+      groupId: event.groupId,
+      accessCode: event.accessCode,
+      name: event.name,
+      startTime: event.startTime,
+      duration: event.duration,
+      endTime,
+      isOpen,
+      status,
+    },
+  });
 }
 
-async function setEventStatus(req, res) {
-  const eventId = Number(req.params.eventId);
-  if (!Number.isFinite(eventId)) {
-    return res.status(400).json({ message: "Invalid eventId" });
-  }
-
-  const { status } = req.body || {};
-  if (!status || !["OPEN", "CLOSED", "FUTURE"].includes(status)) {
-    return res.status(400).json({ message: "Invalid status" });
-  }
-
-  const event = await Event.findByPk(eventId, {
-    include: [{ model: EventGroup, as: "group" }],
+async function listStandaloneEvents(req, res) {
+  const events = await Event.findAll({
+    where: { organizerId: req.user.id, groupId: null },
+    order: [["id", "DESC"]],
   });
-  if (!event) {
-    return res.status(404).json({ message: "Event not found" });
+
+  return res.json({
+    events: events.map((event) => {
+      const { isOpen, status, endTime } = getEventWindowStatus(event);
+      return {
+        id: event.id,
+        groupId: event.groupId,
+        accessCode: event.accessCode,
+        name: event.name,
+        startTime: event.startTime,
+        duration: event.duration,
+        endTime,
+        isOpen,
+        status,
+      };
+    }),
+  });
+}
+
+async function createStandaloneEvent(req, res) {
+  const { name, startTime, duration } = req.body || {};
+  if (!name || !startTime || !duration) {
+    return res
+      .status(400)
+      .json({ message: "name, startTime and duration are required" });
   }
 
-  if (!event.group || event.group.organizerId !== req.user.id) {
-    return res.status(403).json({ message: "Forbidden" });
+  const parsedStart = parseStartTime(startTime);
+  if (!parsedStart) {
+    return res.status(400).json({ message: "Invalid startTime" });
   }
 
-  event.status = status;
-  await event.save();
+  let accessCode = generateAccessCode(6);
+  while (await Event.findOne({ where: { accessCode } })) {
+    accessCode = generateAccessCode(6);
+  }
 
-  return res.json({ event });
+  const event = await Event.create({
+    groupId: null,
+    organizerId: req.user.id,
+    accessCode,
+    name: String(name).trim(),
+    startTime: parsedStart,
+    duration: Number(duration),
+    status: getEventWindowStatus({ startTime: parsedStart, duration }).status,
+  });
+
+  const { isOpen, status, endTime } = getEventWindowStatus(event);
+  return res.status(201).json({
+    event: {
+      id: event.id,
+      groupId: event.groupId,
+      accessCode: event.accessCode,
+      name: event.name,
+      startTime: event.startTime,
+      duration: event.duration,
+      endTime,
+      isOpen,
+      status,
+    },
+  });
 }
 
 async function getEventByCode(req, res) {
@@ -129,6 +208,8 @@ async function getEventByCode(req, res) {
     where: { eventId: event.id, participantId: req.user.id },
   });
 
+  const { isOpen, status, endTime } = getEventWindowStatus(event);
+
   return res.json({
     event: {
       id: event.id,
@@ -136,7 +217,9 @@ async function getEventByCode(req, res) {
       name: event.name,
       startTime: event.startTime,
       duration: event.duration,
-      status: event.status,
+      endTime,
+      isOpen,
+      status,
       groupId: event.groupId,
       checkedIn: Boolean(attendance),
       checkedInAt: attendance ? attendance.createdAt : null,
@@ -157,7 +240,11 @@ async function listAttendance(req, res) {
     return res.status(404).json({ message: "Event not found" });
   }
 
-  if (!event.group || event.group.organizerId !== req.user.id) {
+  const isGroupOwned = Boolean(event.group && event.group.organizerId);
+  const organizerId = isGroupOwned
+    ? event.group.organizerId
+    : event.organizerId;
+  if (organizerId !== req.user.id) {
     return res.status(403).json({ message: "Forbidden" });
   }
 
@@ -173,14 +260,18 @@ async function listAttendance(req, res) {
     order: [["created_at", "DESC"]],
   });
 
+  const { isOpen, status, endTime } = getEventWindowStatus(event);
+
   return res.json({
     event: {
       id: event.id,
       accessCode: event.accessCode,
       name: event.name,
-      status: event.status,
       startTime: event.startTime,
       duration: event.duration,
+      endTime,
+      isOpen,
+      status,
     },
     attendances: attendances.map((a) => ({
       id: a.id,
@@ -193,7 +284,8 @@ async function listAttendance(req, res) {
 module.exports = {
   listEventsForGroup,
   createEvent,
-  setEventStatus,
+  listStandaloneEvents,
+  createStandaloneEvent,
   getEventByCode,
   listAttendance,
 };

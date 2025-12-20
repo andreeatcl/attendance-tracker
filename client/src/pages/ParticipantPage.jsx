@@ -16,6 +16,31 @@ export default function ParticipantPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  function withComputedWindow(ev) {
+    if (!ev) return ev;
+    const start = new Date(ev.startTime);
+    const durationMinutes = Number(ev.duration);
+    const durationMs =
+      Number.isFinite(durationMinutes) && durationMinutes > 0
+        ? durationMinutes * 60 * 1000
+        : 0;
+
+    const startMs = start.getTime();
+    const endMs = Number.isFinite(startMs) ? startMs + durationMs : NaN;
+    const nowMs = Date.now();
+
+    const computedIsOpen =
+      Number.isFinite(startMs) && Number.isFinite(endMs) && durationMs > 0
+        ? nowMs >= startMs && nowMs < endMs
+        : false;
+
+    const isOpen =
+      typeof ev.isOpen === "boolean" ? ev.isOpen : Boolean(computedIsOpen);
+    const status = isOpen ? "OPEN" : "CLOSED";
+
+    return { ...ev, isOpen, status };
+  }
+
   async function lookup() {
     setError("");
     setMessage("");
@@ -26,7 +51,7 @@ export default function ParticipantPage() {
 
     try {
       const data = await eventService.getEventByCode(trimmed);
-      setEvent(data.event);
+      setEvent(withComputedWindow(data.event));
       showToast("Event loaded", "success");
     } catch (e) {
       setError(e?.response?.data?.message || "Lookup failed");
@@ -81,7 +106,7 @@ export default function ParticipantPage() {
                 className="input input-code"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="e.g. X9TRP2"
+                placeholder="ex: X9TRP2"
               />
             </Field>
 
@@ -93,9 +118,7 @@ export default function ParticipantPage() {
                 type="button"
                 variant="primary"
                 onClick={checkIn}
-                disabled={
-                  !code.trim() || event?.status !== "OPEN" || event?.checkedIn
-                }
+                disabled={!code.trim() || !event?.isOpen || event?.checkedIn}
               >
                 Check in
               </Button>
@@ -106,7 +129,14 @@ export default function ParticipantPage() {
                 <div className="muted">Event</div>
                 <div className="event-line">
                   <strong>{event.name ? event.name : `#${event.id}`}</strong> ·{" "}
-                  <span className="pill">{event.status}</span>
+                  <span
+                    className={`pill ${
+                      event.isOpen ? "pill-success" : "pill-danger"
+                    }`}
+                    style={{ textTransform: "uppercase" }}
+                  >
+                    {event.isOpen ? "EVENT OPEN" : "EVENT CLOSED"}
+                  </span>
                   {typeof event.checkedIn === "boolean" ? (
                     <span className="pill" style={{ marginLeft: 8 }}>
                       {event.checkedIn ? "Checked in" : "Not checked in"}

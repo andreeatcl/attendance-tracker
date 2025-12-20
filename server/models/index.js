@@ -7,6 +7,9 @@ const Attendance = require("./Attendance");
 User.hasMany(EventGroup, { foreignKey: "organizerId" });
 EventGroup.belongsTo(User, { as: "organizer", foreignKey: "organizerId" });
 
+User.hasMany(Event, { as: "organizedEvents", foreignKey: "organizerId" });
+Event.belongsTo(User, { as: "organizer", foreignKey: "organizerId" });
+
 EventGroup.hasMany(Event, { foreignKey: "groupId" });
 Event.belongsTo(EventGroup, { as: "group", foreignKey: "groupId" });
 

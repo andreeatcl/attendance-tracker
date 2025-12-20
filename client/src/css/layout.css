@@ -1,6 +1,7 @@
 .app-shell {
   min-height: 100vh;
   background: var(--bg);
+  background: var(--bg-gradient);
 }
 
 .app-main {

@@ -7,3 +7,13 @@
   text-transform: capitalize;
   background: var(--surface);
 }
+
+.pill-success {
+  border-color: rgba(33, 192, 156, 0.35);
+  color: var(--success);
+}
+
+.pill-danger {
+  border-color: rgba(220, 38, 38, 0.25);
+  color: var(--danger);
+}

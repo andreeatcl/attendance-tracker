@@ -1,12 +1,21 @@
 import { api } from "./apiClient";
 
-export async function getEventByCode(code) {
-  const res = await api.get(`/events/code/${encodeURIComponent(code)}`);
+export async function listStandaloneEvents() {
+  const res = await api.get("/events/standalone");
   return res.data;
 }
 
-export async function setEventStatus(eventId, status) {
-  const res = await api.patch(`/events/${eventId}/status`, { status });
+export async function createStandaloneEvent(name, startTime, duration) {
+  const res = await api.post("/events/standalone", {
+    name,
+    startTime,
+    duration,
+  });
+  return res.data;
+}
+
+export async function getEventByCode(code) {
+  const res = await api.get(`/events/code/${encodeURIComponent(code)}`);
   return res.data;
 }
 

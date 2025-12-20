@@ -3,12 +3,8 @@
   display: grid;
   place-items: center;
   padding: 32px 20px;
-  background: radial-gradient(
-      1000px 500px at 20% 10%,
-      rgba(37, 99, 235, 0.12),
-      transparent 60%
-    ),
-    var(--bg);
+  background: var(--bg);
+  background: var(--bg-gradient);
 }
 
 .auth-card {
@@ -61,7 +57,7 @@
 }
 
 .auth-tab.is-active {
-  border-color: rgba(37, 99, 235, 0.35);
-  color: var(--primary-color);
+  background: var(--success);
+  color: var(--surface);
   font-weight: 700;
 }

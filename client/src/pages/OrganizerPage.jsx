@@ -11,8 +11,10 @@ export default function OrganizerPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
 
+  const STANDALONE_GROUP_KEY = "__standalone__";
+
   const [groups, setGroups] = useState([]);
-  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState(STANDALONE_GROUP_KEY);
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [attendance, setAttendance] = useState([]);
@@ -31,8 +33,14 @@ export default function OrganizerPage() {
     setGroups(data.groups || []);
   }
 
-  async function refreshEvents(groupId) {
-    const data = await groupService.listGroupEvents(groupId);
+  async function refreshEvents(groupIdOrKey) {
+    if (groupIdOrKey === STANDALONE_GROUP_KEY) {
+      const data = await eventService.listStandaloneEvents();
+      setEvents(data.events || []);
+      return;
+    }
+
+    const data = await groupService.listGroupEvents(groupIdOrKey);
     setEvents(data.events || []);
   }
 
@@ -75,6 +83,48 @@ export default function OrganizerPage() {
     [groups, selectedGroupId]
   );
 
+  const isStandaloneSelected = selectedGroupId === STANDALONE_GROUP_KEY;
+
+  function isEventOpen(ev) {
+    if (!ev) return false;
+    if (typeof ev.isOpen === "boolean") return ev.isOpen;
+
+    const start = new Date(ev.startTime);
+    const durationMinutes = Number(ev.duration);
+    const durationMs =
+      Number.isFinite(durationMinutes) && durationMinutes > 0
+        ? durationMinutes * 60 * 1000
+        : 0;
+
+    const startMs = start.getTime();
+    const endMs = Number.isFinite(startMs) ? startMs + durationMs : NaN;
+    const nowMs = Date.now();
+
+    return Number.isFinite(startMs) && Number.isFinite(endMs) && durationMs > 0
+      ? nowMs >= startMs && nowMs < endMs
+      : false;
+  }
+
+  function formatDate(value) {
+    try {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return "—";
+      return d.toLocaleDateString();
+    } catch {
+      return "—";
+    }
+  }
+
+  function formatTime(value) {
+    try {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return "—";
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "—";
+    }
+  }
+
   async function onCreateGroup() {
     setError("");
     setInfo("");
@@ -94,8 +144,8 @@ export default function OrganizerPage() {
     setError("");
     setInfo("");
     if (!selectedGroupId) {
-      setError("Select a group first");
-      showToast("Select a group first", "error");
+      setError("Select a group or choose Standalone");
+      showToast("Select a group or choose Standalone", "error");
       return;
     }
 
@@ -114,12 +164,20 @@ export default function OrganizerPage() {
     }
 
     try {
-      await groupService.createGroupEvent(
-        selectedGroupId,
-        trimmedName,
-        startTime,
-        Number(eventDuration)
-      );
+      if (isStandaloneSelected) {
+        await eventService.createStandaloneEvent(
+          trimmedName,
+          startTime,
+          Number(eventDuration)
+        );
+      } else {
+        await groupService.createGroupEvent(
+          selectedGroupId,
+          trimmedName,
+          startTime,
+          Number(eventDuration)
+        );
+      }
       setEventName("");
       setEventDate("");
       setEventTime("");
@@ -129,22 +187,6 @@ export default function OrganizerPage() {
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to create event");
       showToast("Failed to create event", "error");
-    }
-  }
-
-  async function onSetStatus(status) {
-    if (!selectedEvent) return;
-    setError("");
-    setInfo("");
-
-    try {
-      await eventService.setEventStatus(selectedEvent.id, status);
-      await refreshEvents(selectedGroupId);
-      setInfo(`Event set to ${status}`);
-      showToast(`Event set to ${status}`, "success");
-    } catch (e) {
-      setError(e?.response?.data?.message || "Failed to update status");
-      showToast("Failed to update status", "error");
     }
   }
 
@@ -184,8 +226,8 @@ export default function OrganizerPage() {
             label="Choose an event group"
             hint={
               groups.length
-                ? "Events are created inside the selected group."
-                : "Create your first group to start adding events."
+                ? "Events can be grouped or standalone."
+                : "You can create standalone events without a group."
             }
           >
             <select
@@ -194,6 +236,9 @@ export default function OrganizerPage() {
               onChange={(e) => setSelectedGroupId(e.target.value)}
             >
               <option value="">— Select —</option>
+              <option value={STANDALONE_GROUP_KEY}>
+                Standalone (no group)
+              </option>
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
@@ -232,12 +277,14 @@ export default function OrganizerPage() {
           <div className="card">
             <div className="card-title">Events</div>
             <div className="muted" style={{ marginBottom: 10 }}>
-              {selectedGroup ? (
+              {isStandaloneSelected ? (
+                "Creating standalone events"
+              ) : selectedGroup ? (
                 <span>
                   Creating events in <strong>{selectedGroup.name}</strong>
                 </span>
               ) : (
-                "Select a group above to view and create events"
+                "Select a group (or Standalone) above to view and create events"
               )}
             </div>
 
@@ -245,9 +292,9 @@ export default function OrganizerPage() {
               <Field
                 label="Create event"
                 hint={
-                  selectedGroup
+                  selectedGroup || isStandaloneSelected
                     ? "Pick a date and time (no ISO needed)."
-                    : "Pick a group first."
+                    : "Pick a group or Standalone first."
                 }
               >
                 <div className="stack">
@@ -313,8 +360,8 @@ export default function OrganizerPage() {
                   <option value="">— Select —</option>
                   {events.map((ev) => (
                     <option key={ev.id} value={ev.id}>
-                      {ev.name ? `${ev.name} — ` : ""}#{ev.id} — {ev.status} —{" "}
-                      {ev.accessCode}
+                      {ev.id} - {ev.name || "Untitled"} -{" "}
+                      {formatDate(ev.startTime)} - {formatTime(ev.startTime)}
                     </option>
                   ))}
                 </select>
@@ -327,34 +374,31 @@ export default function OrganizerPage() {
           <div className="grid grid-2" style={{ marginTop: 16 }}>
             <div className="card">
               <div className="card-title">Live Session</div>
-              {selectedEvent.name ? (
-                <div style={{ marginTop: 6 }}>
-                  <strong>{selectedEvent.name}</strong>
-                </div>
-              ) : null}
+              <div
+                className="row"
+                style={{
+                  marginTop: 6,
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <strong>{selectedEvent.name || `#${selectedEvent.id}`}</strong>
+                <span
+                  className={`pill ${
+                    isEventOpen(selectedEvent) ? "pill-success" : "pill-danger"
+                  }`}
+                  style={{ textTransform: "uppercase" }}
+                >
+                  {isEventOpen(selectedEvent) ? "EVENT OPEN" : "EVENT CLOSED"}
+                </span>
+              </div>
               <div className="code-box">{selectedEvent.accessCode}</div>
               <div className="muted">
                 Start: {formatDateTime(selectedEvent.startTime)} · Duration:{" "}
                 {selectedEvent.duration} min
               </div>
               <div className="row" style={{ marginTop: 12 }}>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => onSetStatus("OPEN")}
-                >
-                  Open
-                </Button>
-                <Button type="button" onClick={() => onSetStatus("FUTURE")}>
-                  Future
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  onClick={() => onSetStatus("CLOSED")}
-                >
-                  Close
-                </Button>
+                <Button type="button">Show QR</Button>
               </div>
             </div>
 

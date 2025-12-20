@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AuthPage from "../pages/AuthPage";
+import HomePage from "../pages/HomePage";
 import OrganizerPage from "../pages/OrganizerPage";
 import ParticipantPage from "../pages/ParticipantPage";
 
@@ -23,21 +24,7 @@ function RequireRole({ user, role, children }) {
 export default function AppRouter({ user }) {
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          <Navigate
-            to={
-              user
-                ? user.role === "organizer"
-                  ? "/organizer"
-                  : "/participant"
-                : "/login"
-            }
-            replace
-          />
-        }
-      />
+      <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<AuthPage mode="login" />} />
       <Route path="/register" element={<AuthPage mode="register" />} />
 
@@ -61,12 +48,16 @@ export default function AppRouter({ user }) {
       <Route
         path="*"
         element={
-          <RequireAuth user={user}>
-            <Navigate
-              to={user?.role === "organizer" ? "/organizer" : "/participant"}
-              replace
-            />
-          </RequireAuth>
+          <Navigate
+            to={
+              user
+                ? user.role === "organizer"
+                  ? "/organizer"
+                  : "/participant"
+                : "/"
+            }
+            replace
+          />
         }
       />
     </Routes>
