@@ -15,7 +15,6 @@ export default function AuthPage({ mode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("participant");
-  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -26,7 +25,6 @@ export default function AuthPage({ mode }) {
 
   async function onSubmit(e) {
     e.preventDefault();
-    setError("");
 
     const trimmedEmail = String(email || "").trim();
     const trimmedPassword = String(password || "");
@@ -36,7 +34,6 @@ export default function AuthPage({ mode }) {
     if (mode === "register") {
       if (!trimmedFirstName || !trimmedLastName) {
         const msg = "First name and last name are required";
-        setError(msg);
         showToast(msg, "error");
         return;
       }
@@ -54,7 +51,6 @@ export default function AuthPage({ mode }) {
           );
 
     if (!result.ok) {
-      setError(result.message);
       showToast(result.message, "error");
       return;
     }
@@ -69,7 +65,7 @@ export default function AuthPage({ mode }) {
           <div>
             <div className="auth-title">Attendance Tracker</div>
             <div className="auth-sub">
-              Organizer creates an event, participants check in with a code.
+              Login or create an account to start tracking attendance.
             </div>
           </div>
           <div className="auth-tabs">
@@ -150,8 +146,6 @@ export default function AuthPage({ mode }) {
               </select>
             </Field>
           ) : null}
-
-          {error ? <div className="alert alert-error">{error}</div> : null}
 
           <Button variant="primary" type="submit" disabled={loading}>
             {loading

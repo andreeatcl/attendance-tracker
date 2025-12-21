@@ -31,7 +31,13 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ message: "Internal server error" });
+  const isProd =
+    String(process.env.NODE_ENV || "").toLowerCase() === "production";
+  res.status(500).json({
+    message: isProd
+      ? "Internal server error"
+      : err?.message || "Internal server error",
+  });
 });
 
 const startServer = async () => {
@@ -39,12 +45,14 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log("Database connected!");
 
-    try {
-      await sequelize.query(
-        'DELETE FROM "attendances" WHERE event_id IS NOT NULL AND event_id NOT IN (SELECT id FROM "Events")'
-      );
-    } catch (e) {
-      console.warn("Could not cleanup orphaned attendances:", e?.message || e);
+    // Hard reset (DANGEROUS): wipes the whole public schema.
+    // Opt-in only. Use when you want a totally clean DB.
+    // Set DB_RESET=true for one run, then remove it.
+    const dbReset = String(process.env.DB_RESET || "").toLowerCase() === "true";
+    if (dbReset) {
+      console.warn("DB_RESET=true: dropping public schema (ALL DATA LOST)");
+      await sequelize.query("DROP SCHEMA IF EXISTS public CASCADE");
+      await sequelize.query("CREATE SCHEMA public");
     }
 
     const forceSync =

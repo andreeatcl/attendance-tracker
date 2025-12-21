@@ -23,6 +23,33 @@
   gap: 16px;
 }
 
+.grid-2-responsive {
+  grid-template-columns: 1fr 1fr;
+}
+
+.grid-3-responsive {
+  grid-template-columns: 1fr 1fr 140px;
+}
+
+/* When the grid collapses to 1 column (mobile), center cards and keep a consistent width. */
+@media (max-width: 899px) {
+  .grid {
+    justify-items: center;
+  }
+
+  .grid > .card {
+    width: min(100%, 680px);
+  }
+
+  .grid-2-responsive {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-3-responsive {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (min-width: 900px) {
   .grid-2 {
     grid-template-columns: 1fr 1fr;
@@ -36,6 +63,10 @@
   flex-wrap: wrap;
 }
 
+.row > * {
+  min-width: 0;
+}
+
 .stack {
   display: grid;
   gap: 14px;
@@ -47,6 +78,24 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.page-header.page-header-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.page-header.page-header-split > * {
+  min-width: 0;
+}
+
+@media (max-width: 899px) {
+  .page-header.page-header-split {
+    grid-template-columns: 1fr;
+  }
 }
 
 .page-title {

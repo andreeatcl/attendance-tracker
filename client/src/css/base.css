@@ -14,8 +14,6 @@ body {
   background: var(--bg-gradient);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -38,5 +36,4 @@ button {
 
 :focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.35);
-  outline-offset: 2px;
 }

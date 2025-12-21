@@ -7,10 +7,9 @@ export default function HomePage() {
         <section className="home-hero">
           <div className="home-hero-left">
             <div className="home-kicker">Attendance Tracker</div>
-            <h1 className="home-title">Track attendance fast and clean.</h1>
+            <h1 className="home-title">Track event attendance easily.</h1>
             <p className="home-sub">
-              Organizers create events and share a code. Participants check in
-              in seconds.
+              Organizers create events. Participants check in.
             </p>
           </div>
 

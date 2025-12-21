@@ -1,15 +1,24 @@
 export default function HeroIcon({ className = "" }) {
+  const gradientId = "qr-gradient-diagonal";
+
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"
       strokeWidth={1.5}
-      stroke="currentColor"
+      stroke={`url(#${gradientId})`}
       className={className}
       aria-hidden="true"
       focusable="false"
     >
+      <defs>
+        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="rgba(16, 123, 230, 1)" />
+          <stop offset="100%" stopColor="rgba(13, 217, 173, 1)" />
+        </linearGradient>
+      </defs>
+
       <path
         strokeLinecap="round"
         strokeLinejoin="round"

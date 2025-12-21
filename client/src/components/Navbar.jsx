@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import Button from "./ui/Button";
+import HeroIcon from "./icons/HeroIcon";
 
 export default function Navbar({ user, onLogout }) {
   const personalPath =
@@ -9,22 +9,34 @@ export default function Navbar({ user, onLogout }) {
       ? "/participant"
       : "/";
 
+  const displayName = [user?.firstName, user?.lastName]
+    .map((s) => String(s || "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+  const userLabel = displayName || user?.email;
+
   return (
     <header className="nav">
       <div className="nav-inner">
         <Link to="/" className="brand">
+          <HeroIcon className="brand-logo" />
           Attendance Tracker
         </Link>
         <div className="nav-right">
           {user ? (
             <>
               <Link className="nav-link" to={personalPath}>
-                My page
+                My Page
               </Link>
-              <div className="pill">{user.role}</div>
-              <Button type="button" className="nav-logout" onClick={onLogout}>
+              <div className="pill nav-user">{userLabel}</div>
+              <button
+                type="button"
+                className="nav-link nav-logout"
+                onClick={onLogout}
+              >
                 Logout
-              </Button>
+              </button>
             </>
           ) : (
             <>

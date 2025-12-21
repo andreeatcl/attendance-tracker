@@ -3,6 +3,7 @@ const User = require("./User");
 const EventGroup = require("./EventGroup");
 const Event = require("./Event");
 const Attendance = require("./Attendance");
+const EventSkip = require("./EventSkip");
 
 User.hasMany(EventGroup, { foreignKey: "organizerId" });
 EventGroup.belongsTo(User, { as: "organizer", foreignKey: "organizerId" });
@@ -38,4 +39,5 @@ module.exports = {
   EventGroup,
   Event,
   Attendance,
+  EventSkip,
 };

@@ -4,23 +4,22 @@ Under construction!
 
 # Done:
 
-- organizer can create an event or an event group (events within the group - but not recurring)
+- organizer can create an event or an event group (events within the group)
 - participants can check in
 - open/closed functionality is working properly
+- events and groups can be deleted
+- added recurring events
+- UI looks nice + added favicon
+- toasts work
 
 # To do:
 
-- add recurring events feature
-- fix minor UI/UX issues (incl. toast)
-- review and refactor code where needed
 - implement qr code feature
-- add export features
+- add export features - csv/xlsx - currently buttons have no functionality
 - final code review + refactoring
 - create structured README
 
 ### Current app
-
-.
 
 ### How to Run
 
@@ -60,7 +59,7 @@ PORT=5000
 
 ```
 cd server
-node index.js
+npm run dev
 ```
 
 ```

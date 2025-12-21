@@ -13,37 +13,8 @@ export default function ParticipantPage() {
 
   const [code, setCode] = useState("");
   const [event, setEvent] = useState(null);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  function withComputedWindow(ev) {
-    if (!ev) return ev;
-    const start = new Date(ev.startTime);
-    const durationMinutes = Number(ev.duration);
-    const durationMs =
-      Number.isFinite(durationMinutes) && durationMinutes > 0
-        ? durationMinutes * 60 * 1000
-        : 0;
-
-    const startMs = start.getTime();
-    const endMs = Number.isFinite(startMs) ? startMs + durationMs : NaN;
-    const nowMs = Date.now();
-
-    const computedIsOpen =
-      Number.isFinite(startMs) && Number.isFinite(endMs) && durationMs > 0
-        ? nowMs >= startMs && nowMs < endMs
-        : false;
-
-    const isOpen =
-      typeof ev.isOpen === "boolean" ? ev.isOpen : Boolean(computedIsOpen);
-    const status = isOpen ? "OPEN" : "CLOSED";
-
-    return { ...ev, isOpen, status };
-  }
 
   async function lookup() {
-    setError("");
-    setMessage("");
     setEvent(null);
 
     const trimmed = code.trim().toUpperCase();
@@ -51,28 +22,22 @@ export default function ParticipantPage() {
 
     try {
       const data = await eventService.getEventByCode(trimmed);
-      setEvent(withComputedWindow(data.event));
+      setEvent(data.event);
       showToast("Event loaded", "success");
     } catch (e) {
-      setError(e?.response?.data?.message || "Lookup failed");
       showToast("Lookup failed", "error");
     }
   }
 
   async function checkIn() {
-    setError("");
-    setMessage("");
-
     const trimmed = code.trim().toUpperCase();
     if (!trimmed) return;
 
     try {
       const data = await attendanceService.checkIn(trimmed);
-      setMessage(data.message || "Checked in");
       showToast(data.message || "Checked in", "success");
       await lookup();
     } catch (e) {
-      setError(e?.response?.data?.message || "Check-in failed");
       showToast("Check-in failed", "error");
     }
   }
@@ -90,9 +55,6 @@ export default function ParticipantPage() {
             <div className="page-sub">{displayName || user?.email}</div>
           </div>
         </div>
-
-        {error ? <div className="alert alert-error">{error}</div> : null}
-        {message ? <div className="alert alert-success">{message}</div> : null}
 
         <div className="card" style={{ maxWidth: 680 }}>
           <div className="card-title">Check in</div>

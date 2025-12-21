@@ -1,27 +1,78 @@
-const { EventGroup, Event, Attendance, User } = require("../models");
+const { EventGroup, Event, Attendance, User, EventSkip } = require("../models");
+const { UniqueConstraintError } = require("sequelize");
 const { generateAccessCode } = require("../utils/accessCode");
-const { getEventWindowStatus } = require("../utils/eventWindow");
+const {
+  getEventWindowStatus,
+  parseStartTime,
+} = require("../utils/eventWindow");
+const {
+  getGroupSchedule,
+  getCurrentOccurrenceStart,
+  getNextOccurrenceStart,
+  toDateOnlyString,
+  toTimeHHmmString,
+} = require("../utils/recurrence");
 
-function parseStartTime(value) {
-  if (value instanceof Date) return value;
-  const raw = String(value || "").trim();
-  if (!raw) return null;
+function roundUpMinutes(date, stepMinutes) {
+  const d = new Date(date.getTime());
+  const ms = stepMinutes * 60 * 1000;
+  const rounded = Math.ceil(d.getTime() / ms) * ms;
+  return new Date(rounded);
+}
 
-  const m = raw.match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/
-  );
-  if (!m) return null;
+async function createUniqueAccessCode(length = 6) {
+  let accessCode = generateAccessCode(length);
+  while (await Event.findOne({ where: { accessCode } })) {
+    accessCode = generateAccessCode(length);
+  }
+  return accessCode;
+}
 
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  const hour = Number(m[4]);
-  const minute = Number(m[5]);
-  const second = m[6] ? Number(m[6]) : 0;
+async function ensureGroupEventForStart(group, startTime) {
+  const skip = await EventSkip.findOne({
+    where: { groupId: group.id, startTime },
+  });
+  if (skip) return null;
 
-  const dt = new Date(year, month - 1, day, hour, minute, second, 0);
-  if (Number.isNaN(dt.getTime())) return null;
-  return dt;
+  const existing = await Event.findOne({
+    where: { groupId: group.id, startTime },
+  });
+  if (existing) return existing;
+
+  const duration = Number(group.defaultDuration) || 60;
+  const name = String(group.defaultEventName || group.name || "").trim();
+
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const accessCode = await createUniqueAccessCode(6);
+    try {
+      return await Event.create({
+        groupId: group.id,
+        organizerId: group.organizerId,
+        accessCode,
+        name,
+        startTime,
+        duration,
+        status: getEventWindowStatus({ startTime, duration }).status,
+      });
+    } catch (e) {
+      lastError = e;
+      if (e instanceof UniqueConstraintError) {
+        const maybeExisting = await Event.findOne({
+          where: { groupId: group.id, startTime },
+        });
+        if (maybeExisting) return maybeExisting;
+        continue;
+      }
+      throw e;
+    }
+  }
+
+  const maybeExisting = await Event.findOne({
+    where: { groupId: group.id, startTime },
+  });
+  if (maybeExisting) return maybeExisting;
+  throw lastError || new Error("Failed to create recurring event occurrence");
 }
 
 async function listEventsForGroup(req, res) {
@@ -38,13 +89,74 @@ async function listEventsForGroup(req, res) {
     return res.status(404).json({ message: "Group not found" });
   }
 
+  try {
+    let schedule = getGroupSchedule(group);
+
+    if (!schedule) {
+      const now = new Date();
+      const normalizedRecurrence = String(group.recurrence || "").toUpperCase();
+      const shouldBackfill =
+        !normalizedRecurrence ||
+        normalizedRecurrence === "NONE" ||
+        !group.recurrenceStartDate ||
+        !group.recurrenceTime ||
+        !group.defaultDuration;
+
+      if (shouldBackfill) {
+        const rounded = roundUpMinutes(now, 5);
+        group.recurrence =
+          normalizedRecurrence && normalizedRecurrence !== "NONE"
+            ? normalizedRecurrence
+            : "WEEKLY";
+        group.recurrenceStartDate =
+          group.recurrenceStartDate || toDateOnlyString(now);
+        group.recurrenceTime =
+          group.recurrenceTime || toTimeHHmmString(rounded);
+        group.defaultDuration = Number(group.defaultDuration) || 60;
+        await group.save();
+      }
+
+      schedule = getGroupSchedule(group);
+    }
+
+    if (schedule) {
+      const now = new Date();
+      const currentStart = getCurrentOccurrenceStart(schedule, now);
+      const nextStart = getNextOccurrenceStart(schedule, now);
+
+      const uniqueStarts = [];
+      for (const st of [currentStart, nextStart]) {
+        if (!st) continue;
+        if (!uniqueStarts.some((d) => d.getTime() === st.getTime())) {
+          uniqueStarts.push(st);
+        }
+      }
+
+      for (const startTime of uniqueStarts) {
+        await ensureGroupEventForStart(group, startTime);
+      }
+    }
+  } catch (e) {
+    console.error("Recurring generation failed:", e);
+  }
+
   const events = await Event.findAll({
     where: { groupId },
-    order: [["id", "DESC"]],
+    order: [["startTime", "DESC"]],
+    limit: 12,
   });
 
   return res.json({
-    group,
+    group: {
+      id: group.id,
+      name: group.name,
+      organizerId: group.organizerId,
+      recurrence: group.recurrence,
+      recurrenceStartDate: group.recurrenceStartDate,
+      recurrenceTime: group.recurrenceTime,
+      defaultDuration: group.defaultDuration,
+      defaultEventName: group.defaultEventName,
+    },
     events: events.map((event) => {
       const { isOpen, status, endTime } = getEventWindowStatus(event);
       return {
@@ -76,7 +188,7 @@ async function createEvent(req, res) {
   }
 
   const parsedStart = parseStartTime(startTime);
-  if (!parsedStart) {
+  if (!(parsedStart instanceof Date) || Number.isNaN(parsedStart.getTime())) {
     return res.status(400).json({ message: "Invalid startTime" });
   }
 
@@ -88,10 +200,14 @@ async function createEvent(req, res) {
     return res.status(404).json({ message: "Group not found" });
   }
 
-  let accessCode = generateAccessCode(6);
-  while (await Event.findOne({ where: { accessCode } })) {
-    accessCode = generateAccessCode(6);
+  if (String(group.recurrence || "NONE").toUpperCase() !== "NONE") {
+    return res.status(400).json({
+      message:
+        "This group is recurring. Update the group's schedule; events are generated automatically.",
+    });
   }
+
+  const accessCode = await createUniqueAccessCode(6);
 
   const event = await Event.create({
     groupId,
@@ -152,14 +268,11 @@ async function createStandaloneEvent(req, res) {
   }
 
   const parsedStart = parseStartTime(startTime);
-  if (!parsedStart) {
+  if (!(parsedStart instanceof Date) || Number.isNaN(parsedStart.getTime())) {
     return res.status(400).json({ message: "Invalid startTime" });
   }
 
-  let accessCode = generateAccessCode(6);
-  while (await Event.findOne({ where: { accessCode } })) {
-    accessCode = generateAccessCode(6);
-  }
+  const accessCode = await createUniqueAccessCode(6);
 
   const event = await Event.create({
     groupId: null,
@@ -281,6 +394,45 @@ async function listAttendance(req, res) {
   });
 }
 
+async function deleteEvent(req, res) {
+  const eventId = Number(req.params.eventId);
+  if (!Number.isFinite(eventId)) {
+    return res.status(400).json({ message: "Invalid eventId" });
+  }
+
+  const event = await Event.findByPk(eventId, {
+    include: [{ model: EventGroup, as: "group" }],
+  });
+  if (!event) {
+    return res.status(404).json({ message: "Event not found" });
+  }
+
+  const isGroupOwned = Boolean(event.group && event.group.organizerId);
+  const organizerId = isGroupOwned
+    ? event.group.organizerId
+    : event.organizerId;
+
+  if (organizerId !== req.user.id) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  if (event.groupId) {
+    try {
+      await EventSkip.create({
+        groupId: event.groupId,
+        startTime: event.startTime,
+      });
+    } catch (e) {
+      if (!(e instanceof UniqueConstraintError)) {
+        throw e;
+      }
+    }
+  }
+
+  await event.destroy();
+  return res.json({ ok: true });
+}
+
 module.exports = {
   listEventsForGroup,
   createEvent,
@@ -288,4 +440,5 @@ module.exports = {
   createStandaloneEvent,
   getEventByCode,
   listAttendance,
+  deleteEvent,
 };

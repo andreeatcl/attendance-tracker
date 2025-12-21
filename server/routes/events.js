@@ -6,6 +6,7 @@ const {
   createStandaloneEvent,
   getEventByCode,
   listAttendance,
+  deleteEvent,
 } = require("../controllers/eventController");
 
 const router = express.Router();
@@ -30,5 +31,7 @@ router.get(
   requireRole("organizer"),
   listAttendance
 );
+
+router.delete("/:eventId", authRequired, requireRole("organizer"), deleteEvent);
 
 module.exports = router;
