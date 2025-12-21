@@ -20,6 +20,7 @@ Under construction!
 - create structured README
 
 ### Current app
+<img width="1877" height="1077" alt="attendance_tracker" src="https://github.com/user-attachments/assets/e46f636d-8bde-4e83-84fc-91707942f095" />
 
 ### How to Run
 
