@@ -12,6 +12,7 @@ const {
   toDateOnlyString,
   toTimeHHmmString,
 } = require("../utils/recurrence");
+const QRCode = require("qrcode");
 
 function roundUpMinutes(date, stepMinutes) {
   const d = new Date(date.getTime());
@@ -433,6 +434,48 @@ async function deleteEvent(req, res) {
   return res.json({ ok: true });
 }
 
+async function getEventQRCode(req, res) {
+  const eventId = Number(req.params.eventId);
+  if (!Number.isFinite(eventId)) {
+    return res.status(400).json({ message: "Invalid eventId" });
+  }
+
+  const event = await Event.findByPk(eventId, {
+    include: [{ model: EventGroup, as: "group" }],
+  });
+  if (!event) {
+    return res.status(404).json({ message: "Event not found" });
+  }
+
+  const isGroupOwned = Boolean(event.group && event.group.organizerId);
+  const organizerId = isGroupOwned
+    ? event.group.organizerId
+    : event.organizerId;
+
+  if (organizerId !== req.user.id) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  try {
+    // Generate QR code as data URL
+    const qrDataURL = await QRCode.toDataURL(event.accessCode, {
+      errorCorrectionLevel: "M",
+      width: 300,
+      margin: 2,
+    });
+
+    return res.json({
+      qrCode: qrDataURL,
+      accessCode: event.accessCode,
+      eventId: event.id,
+      eventName: event.name,
+    });
+  } catch (error) {
+    console.error("QR code generation error:", error);
+    return res.status(500).json({ message: "Failed to generate QR code" });
+  }
+}
+
 module.exports = {
   listEventsForGroup,
   createEvent,
@@ -441,4 +484,5 @@ module.exports = {
   getEventByCode,
   listAttendance,
   deleteEvent,
+  getEventQRCode,
 };

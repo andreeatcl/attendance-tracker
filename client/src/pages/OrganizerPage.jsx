@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Button from "../components/ui/Button";
 import Field from "../components/ui/Field";
+import QRCodeModal from "../components/QRCodeModal";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
@@ -38,6 +39,9 @@ export default function OrganizerPage() {
   const [eventDate, setEventDate] = useState("");
   const [eventTime, setEventTime] = useState("");
   const [eventDuration, setEventDuration] = useState("60");
+
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrCodeData, setQRCodeData] = useState(null);
 
   async function refreshGroups() {
     const data = await groupService.listGroups();
@@ -304,6 +308,22 @@ export default function OrganizerPage() {
     } catch (e) {
       showToast("Failed to refresh session", "error");
     }
+  }
+
+  async function onShowQRCode() {
+    if (!selectedEvent) return;
+    try {
+      const data = await eventService.getEventQRCode(selectedEvent.id);
+      setQRCodeData(data.qrCode);
+      setShowQRModal(true);
+    } catch (e) {
+      showToast("Failed to generate QR code", "error");
+    }
+  }
+
+  function onCloseQRModal() {
+    setShowQRModal(false);
+    setQRCodeData(null);
   }
 
   const displayName = [user?.firstName, user?.lastName]
@@ -626,7 +646,7 @@ export default function OrganizerPage() {
                 {selectedEvent.duration} min
               </div>
               <div className="row" style={{ marginTop: 12 }}>
-                <Button className="nav-logout" type="button">
+                <Button className="nav-logout" type="button" onClick={onShowQRCode}>
                   Show QR
                 </Button>
               </div>
@@ -691,6 +711,14 @@ export default function OrganizerPage() {
             </div>
           </div>
         ) : null}
+
+        <QRCodeModal
+          isOpen={showQRModal}
+          onClose={onCloseQRModal}
+          qrCodeData={qrCodeData}
+          accessCode={selectedEvent?.accessCode || ""}
+          eventName={selectedEvent?.name || ""}
+        />
       </div>
     </div>
   );
