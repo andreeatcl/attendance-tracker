@@ -45,15 +45,24 @@ cd ..
 
 4. Create a .env file inside the server folder
 
+   You can copy the `.env.example` file and update it with your actual values:
+
+```bash
+cd server
+cp .env.example .env
 ```
+
+   Then edit the `.env` file with your database credentials:
+
+```
+PORT=5000
+DB_NAME=attendance_db
+DB_USER=postgres
+DB_PASS=Put_Your_Postgres_Password_Here
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=attendance_db
-DB_USER=user
-DB_PASS=your_postgres_password_here
-
-JWT_SECRET=put_a_long_random_string_here
-PORT=5000
+JWT_SECRET=pune_un_string_lung_aici
+JWT_EXPIRES_IN=7d
 ```
 
 5. Run the app (in separate terminals)
