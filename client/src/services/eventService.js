@@ -28,3 +28,8 @@ export async function deleteEvent(eventId) {
   const res = await api.delete(`/events/${eventId}`);
   return res.data;
 }
+
+export async function getEventQRCode(eventId) {
+  const res = await api.get(`/events/${eventId}/qr`);
+  return res.data;
+}

@@ -7,6 +7,7 @@ const {
   getEventByCode,
   listAttendance,
   deleteEvent,
+  getEventQRCode,
 } = require("../controllers/eventController");
 
 const router = express.Router();
@@ -30,6 +31,12 @@ router.get(
   authRequired,
   requireRole("organizer"),
   listAttendance
+);
+router.get(
+  "/:eventId/qr",
+  authRequired,
+  requireRole("organizer"),
+  getEventQRCode
 );
 
 router.delete("/:eventId", authRequired, requireRole("organizer"), deleteEvent);
