@@ -10,6 +10,8 @@ const {
 const {
   listEventsForGroup,
   createEvent,
+  exportGroupParticipantsCSV,
+  exportGroupParticipantsXLSX,
 } = require("../controllers/eventController");
 
 const router = express.Router();
@@ -26,5 +28,7 @@ router.delete("/:groupId", deleteGroup);
 
 router.get("/:groupId/events", listEventsForGroup);
 router.post("/:groupId/events", createEvent);
+router.get("/:groupId/export-csv", exportGroupParticipantsCSV);
+router.get("/:groupId/export-xlsx", exportGroupParticipantsXLSX);
 
 module.exports = router;

@@ -28,3 +28,19 @@ export async function deleteEvent(eventId) {
   const res = await api.delete(`/events/${eventId}`);
   return res.data;
 }
+
+export async function exportEventCSV(eventId) {
+  const res = await api.get(
+    `/events/${eventId}/export-csv`,
+    { responseType: "blob" }
+  );
+  return res.data;
+}
+
+export async function exportEventXLSX(eventId) {
+  const res = await api.get(
+    `/events/${eventId}/export-xlsx`,
+    { responseType: "blob" }
+  );
+  return res.data;
+}
