@@ -1,6 +1,9 @@
 const { EventGroup, Event, Attendance, User, EventSkip } = require("../models");
 const { UniqueConstraintError } = require("sequelize");
 const { generateAccessCode } = require("../utils/accessCode");
+const { generateQRCode } = require("../utils/qrCode");
+const { Parser } = require("json2csv");
+const XLSX = require('xlsx');
 const {
   getEventWindowStatus,
   parseStartTime,
@@ -146,6 +149,34 @@ async function listEventsForGroup(req, res) {
     limit: 12,
   });
 
+  // Importă generatorul de QR doar aici pentru a evita probleme circulare
+  const { generateQRCode } = require("../utils/qrCode");
+
+  // Generează codul QR pentru fiecare eveniment (asincron)
+  const eventsWithQr = await Promise.all(
+    events.map(async (event) => {
+      const { isOpen, status, endTime } = getEventWindowStatus(event);
+      let qrCode = null;
+      try {
+        qrCode = await generateQRCode(event.accessCode);
+      } catch (err) {
+        qrCode = null;
+      }
+      return {
+        id: event.id,
+        groupId: event.groupId,
+        accessCode: event.accessCode,
+        name: event.name,
+        startTime: event.startTime,
+        duration: event.duration,
+        endTime,
+        isOpen,
+        status,
+        qrCode,
+      };
+    })
+  );
+
   return res.json({
     group: {
       id: group.id,
@@ -157,20 +188,7 @@ async function listEventsForGroup(req, res) {
       defaultDuration: group.defaultDuration,
       defaultEventName: group.defaultEventName,
     },
-    events: events.map((event) => {
-      const { isOpen, status, endTime } = getEventWindowStatus(event);
-      return {
-        id: event.id,
-        groupId: event.groupId,
-        accessCode: event.accessCode,
-        name: event.name,
-        startTime: event.startTime,
-        duration: event.duration,
-        endTime,
-        isOpen,
-        status,
-      };
-    }),
+    events: eventsWithQr,
   });
 }
 
@@ -219,6 +237,15 @@ async function createEvent(req, res) {
     status: getEventWindowStatus({ startTime: parsedStart, duration }).status,
   });
 
+  // Generează codul QR pentru accessCode
+  let qrCodeDataUrl = null;
+  try {
+    qrCodeDataUrl = await generateQRCode(event.accessCode);
+  } catch (err) {
+    // Dacă generarea codului QR eșuează, continuă fără el
+    qrCodeDataUrl = null;
+  }
+
   const { isOpen, status, endTime } = getEventWindowStatus(event);
   return res.status(201).json({
     event: {
@@ -231,6 +258,7 @@ async function createEvent(req, res) {
       endTime,
       isOpen,
       status,
+      qrCode: qrCodeDataUrl,
     },
   });
 }
@@ -241,9 +269,19 @@ async function listStandaloneEvents(req, res) {
     order: [["id", "DESC"]],
   });
 
-  return res.json({
-    events: events.map((event) => {
+  // Importă generatorul de QR doar aici pentru a evita probleme circulare
+  const { generateQRCode } = require("../utils/qrCode");
+
+  // Generează codul QR pentru fiecare eveniment (asincron)
+  const eventsWithQr = await Promise.all(
+    events.map(async (event) => {
       const { isOpen, status, endTime } = getEventWindowStatus(event);
+      let qrCode = null;
+      try {
+        qrCode = await generateQRCode(event.accessCode);
+      } catch (err) {
+        qrCode = null;
+      }
       return {
         id: event.id,
         groupId: event.groupId,
@@ -254,8 +292,13 @@ async function listStandaloneEvents(req, res) {
         endTime,
         isOpen,
         status,
+        qrCode,
       };
-    }),
+    })
+  );
+
+  return res.json({
+    events: eventsWithQr,
   });
 }
 
@@ -394,6 +437,178 @@ async function listAttendance(req, res) {
   });
 }
 
+// Exportă participanții unui eveniment în CSV
+async function exportEventParticipantsCSV(req, res) {
+  try {
+    const eventId = Number(req.params.eventId);
+    if (!Number.isFinite(eventId)) {
+      return res.status(400).json({ message: "Invalid eventId" });
+    }
+
+    // Găsește evenimentul și verifică organizatorul
+    const event = await Event.findOne({
+      where: { id: eventId, organizerId: req.user.id },
+    });
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // Găsește participanții
+    const attendances = await Attendance.findAll({
+      where: { eventId },
+      include: [{ model: User, as: "participant", attributes: ["firstName", "lastName", "email"] }],
+    });
+
+    // Extrage datele relevante
+    const participants = attendances.map(a => ({
+      name: [a.participant?.firstName, a.participant?.lastName].filter(Boolean).join(" "),
+      email: a.participant?.email || ""
+    }));
+
+    // Generează CSV
+    const parser = new Parser({ fields: ["name", "email"] });
+    const csv = parser.parse(participants);
+
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`event_${eventId}_participants.csv`);
+    return res.send(csv);
+  } catch (err) {
+    console.error("Export CSV error:", err);
+    return res.status(500).json({ message: "Export CSV failed", error: String(err) });
+  }
+}
+
+// Exportă participanții unui grup de evenimente în CSV
+async function exportGroupParticipantsCSV(req, res) {
+  const groupId = Number(req.params.groupId);
+  if (!Number.isFinite(groupId)) {
+    return res.status(400).json({ message: "Invalid groupId" });
+  }
+
+  // Găsește grupul și verifică organizatorul
+  const group = await EventGroup.findOne({
+    where: { id: groupId, organizerId: req.user.id },
+  });
+  if (!group) {
+    return res.status(404).json({ message: "Group not found" });
+  }
+
+  // Găsește toate evenimentele din grup
+  const events = await Event.findAll({
+    where: { groupId },
+    attributes: ["id", "name", "startTime"],
+  });
+  const eventIds = events.map(e => e.id);
+
+  // Găsește toate participările la aceste evenimente
+  const attendances = await Attendance.findAll({
+    where: { eventId: eventIds },
+    include: [{ model: User, as: "participant", attributes: ["firstName", "lastName", "email"] }],
+  });
+
+  // Extrage datele relevante
+  const participants = attendances.map(a => ({
+    eventId: a.eventId,
+    eventName: events.find(e => e.id === a.eventId)?.name || "",
+    eventStart: events.find(e => e.id === a.eventId)?.startTime || "",
+    name: [a.participant?.firstName, a.participant?.lastName].filter(Boolean).join(" "),
+    email: a.participant?.email || ""
+  }));
+
+  // Generează CSV
+  const { Parser } = require('json2csv');
+  const parser = new Parser({ fields: ["eventId", "eventName", "eventStart", "name", "email"] });
+  const csv = parser.parse(participants);
+
+  res.header('Content-Type', 'text/csv');
+  res.attachment(`group_${groupId}_participants.csv`);
+  return res.send(csv);
+}
+
+// Exportă participanții unui eveniment în XLSX (doar nume și email)
+async function exportEventParticipantsXLSX(req, res) {
+  try {
+    const eventId = Number(req.params.eventId);
+    if (!Number.isFinite(eventId)) {
+      return res.status(400).json({ message: "Invalid eventId" });
+    }
+
+    const event = await Event.findOne({
+      where: { id: eventId, organizerId: req.user.id },
+    });
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    const attendances = await Attendance.findAll({
+      where: { eventId },
+      include: [{ model: User, as: "participant", attributes: ["firstName", "lastName", "email"] }],
+    });
+
+    const participants = attendances.map(a => ({
+      name: [a.participant?.firstName, a.participant?.lastName].filter(Boolean).join(" "),
+      email: a.participant?.email || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(participants);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Participants");
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+    res.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.attachment(`event_${eventId}_participants.xlsx`);
+    return res.send(buffer);
+  } catch (err) {
+    console.error("Export XLSX error:", err);
+    return res.status(500).json({ message: "Export XLSX failed", error: String(err) });
+  }
+}
+
+// Exportă participanții unui grup de evenimente în XLSX (doar nume și email)
+async function exportGroupParticipantsXLSX(req, res) {
+  try {
+    const groupId = Number(req.params.groupId);
+    if (!Number.isFinite(groupId)) {
+      return res.status(400).json({ message: "Invalid groupId" });
+    }
+
+    const group = await EventGroup.findOne({
+      where: { id: groupId, organizerId: req.user.id },
+    });
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    const events = await Event.findAll({
+      where: { groupId },
+      attributes: ["id", "name", "startTime"],
+    });
+    const eventIds = events.map(e => e.id);
+
+    const attendances = await Attendance.findAll({
+      where: { eventId: eventIds },
+      include: [{ model: User, as: "participant", attributes: ["firstName", "lastName", "email"] }],
+    });
+
+    const participants = attendances.map(a => ({
+      name: [a.participant?.firstName, a.participant?.lastName].filter(Boolean).join(" "),
+      email: a.participant?.email || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(participants);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Participants");
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+    res.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.attachment(`group_${groupId}_participants.xlsx`);
+    return res.send(buffer);
+  } catch (err) {
+    console.error("Export XLSX error:", err);
+    return res.status(500).json({ message: "Export XLSX failed", error: String(err) });
+  }
+}
+
 async function deleteEvent(req, res) {
   const eventId = Number(req.params.eventId);
   if (!Number.isFinite(eventId)) {
@@ -441,4 +656,8 @@ module.exports = {
   getEventByCode,
   listAttendance,
   deleteEvent,
+  exportEventParticipantsCSV,
+  exportGroupParticipantsCSV,
+  exportEventParticipantsXLSX,
+  exportGroupParticipantsXLSX,
 };

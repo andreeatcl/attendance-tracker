@@ -48,3 +48,13 @@ export async function deleteGroup(groupId) {
   const res = await api.delete(`/groups/${groupId}`);
   return res.data;
 }
+
+export async function exportGroupCSV(groupId) {
+  const res = await api.get(`/groups/${groupId}/export-csv`, { responseType: "blob" });
+  return res.data;
+}
+
+export async function exportGroupXLSX(groupId) {
+  const res = await api.get(`/groups/${groupId}/export-xlsx`, { responseType: "blob" });
+  return res.data;
+}

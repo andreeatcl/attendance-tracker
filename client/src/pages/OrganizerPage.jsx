@@ -19,6 +19,8 @@ export default function OrganizerPage() {
 
   const STANDALONE_GROUP_KEY = "__standalone__";
 
+  const [showQr, setShowQr] = useState(false);
+
   const [groups, setGroups] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState(STANDALONE_GROUP_KEY);
   const [events, setEvents] = useState([]);
@@ -310,6 +312,74 @@ export default function OrganizerPage() {
     .filter(Boolean)
     .join(" ");
 
+  async function handleExportGroupCSV() {
+    if (!selectedGroupId || selectedGroupId === STANDALONE_GROUP_KEY) return;
+    try {
+      const blob = await groupService.exportGroupCSV(selectedGroupId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `group_${selectedGroupId}_participants.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      showToast("Failed to export CSV", "error");
+    }
+  }
+
+  async function handleExportEventCSV() {
+    if (!selectedEventId) return;
+    try {
+      const blob = await eventService.exportEventCSV(selectedEventId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `event_${selectedEventId}_participants.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      showToast("Failed to export CSV", "error");
+    }
+  }
+
+  async function handleExportGroupXLSX() {
+    if (!selectedGroupId || selectedGroupId === STANDALONE_GROUP_KEY) return;
+    try {
+      const blob = await groupService.exportGroupXLSX(selectedGroupId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `group_${selectedGroupId}_participants.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      showToast("Failed to export XLSX", "error");
+    }
+  }
+
+  async function handleExportEventXLSX() {
+    if (!selectedEventId) return;
+    try {
+      const blob = await eventService.exportEventXLSX(selectedEventId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `event_${selectedEventId}_participants.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      showToast("Failed to export XLSX", "error");
+    }
+  }
+
   return (
     <div className="page">
       <div className="container">
@@ -475,10 +545,10 @@ export default function OrganizerPage() {
                   <div
                     style={{ display: "flex", gap: 8, alignItems: "center" }}
                   >
-                    <Button className="btn-colored" type="button">
+                    <Button className="btn-colored" type="button" onClick={handleExportGroupCSV}>
                       CSV
                     </Button>
-                    <Button className="btn-colored" type="button">
+                    <Button className="btn-colored" type="button" onClick={handleExportGroupXLSX}>
                       XLSX
                     </Button>
                     <Button
@@ -621,14 +691,30 @@ export default function OrganizerPage() {
                 </div>
               </div>
               <div className="code-box">{selectedEvent.accessCode}</div>
-              <div className="muted">
-                Start: {formatDateTime(selectedEvent.startTime)} · Duration:{" "}
-                {selectedEvent.duration} min
-              </div>
               <div className="row" style={{ marginTop: 12 }}>
-                <Button className="nav-logout" type="button">
-                  Show QR
+                <Button
+                  className="nav-logout"
+                  type="button"
+                  onClick={() => setShowQr((v) => !v)}
+                  disabled={!selectedEvent.qrCode}
+                >
+                  {showQr ? "Hide QR" : "Show QR"}
                 </Button>
+              </div>
+              {showQr && selectedEvent.qrCode && (
+                <div style={{ margin: '16px 0', textAlign: 'center' }}>
+                  <img
+                    src={selectedEvent.qrCode}
+                    alt="QR code for event access"
+                    style={{ width: 180, height: 180 }}
+                  />
+                  <div className="muted" style={{ marginTop: 4 }}>
+                    Scan for access code
+                  </div>
+                </div>
+              )}
+              <div className="muted">
+                Start: {formatDateTime(selectedEvent.startTime)} · Duration: {selectedEvent.duration} min
               </div>
             </div>
 
@@ -639,10 +725,10 @@ export default function OrganizerPage() {
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <span className="muted">Export attendance for event:</span>
-                  <Button className="btn-colored" type="button">
+                  <Button className="btn-colored" type="button" onClick={handleExportEventCSV}>
                     CSV
                   </Button>
-                  <Button className="btn-colored" type="button">
+                  <Button className="btn-colored" type="button" onClick={handleExportEventXLSX}>
                     XLSX
                   </Button>
                   <Button
