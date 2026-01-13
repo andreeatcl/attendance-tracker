@@ -7,6 +7,8 @@ const {
   getEventByCode,
   listAttendance,
   deleteEvent,
+  exportEventParticipantsCSV,
+  exportEventParticipantsXLSX,
 } = require("../controllers/eventController");
 
 const router = express.Router();
@@ -30,6 +32,18 @@ router.get(
   authRequired,
   requireRole("organizer"),
   listAttendance
+);
+router.get(
+  "/:eventId/export-csv",
+  authRequired,
+  requireRole("organizer"),
+  exportEventParticipantsCSV
+);
+router.get(
+  "/:eventId/export-xlsx",
+  authRequired,
+  requireRole("organizer"),
+  exportEventParticipantsXLSX
 );
 
 router.delete("/:eventId", authRequired, requireRole("organizer"), deleteEvent);
