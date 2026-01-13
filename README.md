@@ -56,6 +56,22 @@ DB_PASS=your_postgres_password_here
 
 JWT_SECRET=put_a_long_random_string_here
 PORT=5000
+
+# CORS (for local dev)
+CORS_ORIGIN=http://localhost:5173
+```
+
+Optional (recommended for Railway/any cloud Postgres): use a single connection string
+
+```
+DATABASE_URL=postgres://user:pass@host:5432/attendance_db
+DB_SSL=true
+```
+
+Frontend env (Vite): create `client/.env`
+
+```
+VITE_API_URL=http://localhost:5000
 ```
 
 5. Run the app (in separate terminals)
@@ -69,3 +85,30 @@ npm run dev
 cd client
 npm run dev
 ```
+
+### Deployment notes (Railway)
+
+Railway does not use your local `.env` files automatically. You still keep `.env` files for local development, but on Railway you must set the same keys in the Railway service **Variables**.
+
+**Backend (Railway service: `server/`)**
+
+- Create a new Railway project from this GitHub repo.
+- Add a Postgres database in Railway (it will provide `DATABASE_URL`).
+- Create a backend service from the `server/` folder.
+- In the backend service **Variables**, set:
+  - `NODE_ENV=production`
+  - `JWT_SECRET=your_long_random_string`
+  - `CORS_ORIGIN=https://your-frontend-domain` (you can provide multiple, comma-separated; you can temporarily use `*`)
+  - `DB_SYNC_MODE=safe`
+  - `DB_RESET` must NOT be set to `true` in production
+  - `DATABASE_URL` (Railway usually injects this automatically when you link the DB)
+
+Notes:
+
+- Railway provides `PORT` automatically; the server already listens on `process.env.PORT`.
+- If you use Railway Postgres, `DATABASE_URL` is the simplest config; you typically don’t need `DB_HOST/DB_NAME/...`.
+
+**Frontend (Vite app)**
+
+- Deploy the `client/` app wherever you want (Railway Static, Vercel, Netlify, etc.).
+- Set `VITE_API_URL` to your deployed backend base URL (for example: `https://your-backend.up.railway.app`).

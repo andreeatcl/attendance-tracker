@@ -19,15 +19,20 @@ const isProd = String(process.env.NODE_ENV || "")
   .includes("prod");
 
 if (isProd) {
-  const required = [
-    "JWT_SECRET",
-    "DB_NAME",
-    "DB_USER",
-    "DB_PASS",
-    "DB_HOST",
-    "CORS_ORIGIN",
-  ];
-  const missing = required.filter((k) => !String(process.env[k] || "").trim());
+  const requiredAlways = ["JWT_SECRET", "CORS_ORIGIN"];
+  const missingAlways = requiredAlways.filter(
+    (k) => !String(process.env[k] || "").trim()
+  );
+
+  const hasDatabaseUrl = Boolean(String(process.env.DATABASE_URL || "").trim());
+  const requiredDbParts = ["DB_NAME", "DB_USER", "DB_PASS", "DB_HOST"];
+  const missingDbParts = requiredDbParts.filter(
+    (k) => !String(process.env[k] || "").trim()
+  );
+
+  const missing = hasDatabaseUrl
+    ? missingAlways
+    : [...missingAlways, ...missingDbParts];
   if (missing.length) {
     console.error(
       `Missing required environment variables for production: ${missing.join(
@@ -48,6 +53,7 @@ app.use(
     origin(origin, callback) {
       if (!origin) return callback(null, true);
       if (!isProd) return callback(null, true);
+      if (allowedOrigins.includes("*")) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error("CORS origin not allowed"));
     },
