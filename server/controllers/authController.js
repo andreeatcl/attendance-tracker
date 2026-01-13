@@ -3,7 +3,10 @@ const jwt = require("jsonwebtoken");
 const { User } = require("../models");
 
 function signToken(user) {
-  const secret = process.env.JWT_SECRET || "no_jwt_token";
+  const secret = String(process.env.JWT_SECRET || "").trim();
+  if (!secret) {
+    throw new Error("JWT_SECRET is required");
+  }
   const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
 
   return jwt.sign({ id: user.id, email: user.email, role: user.role }, secret, {
@@ -49,7 +52,12 @@ async function register(req, res) {
     role: role || "participant",
   });
 
-  const token = signToken(user);
+  let token;
+  try {
+    token = signToken(user);
+  } catch (e) {
+    return res.status(500).json({ message: "Server misconfigured" });
+  }
   return res.status(201).json({
     token,
     user: {
@@ -79,7 +87,12 @@ async function login(req, res) {
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
-  const token = signToken(user);
+  let token;
+  try {
+    token = signToken(user);
+  } catch (e) {
+    return res.status(500).json({ message: "Server misconfigured" });
+  }
   return res.json({
     token,
     user: {

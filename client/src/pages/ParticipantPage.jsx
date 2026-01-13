@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BrowserQRCodeReader } from "@zxing/browser";
 import Button from "../components/ui/Button";
 import Field from "../components/ui/Field";
 import { useAuth } from "../context/AuthContext";
@@ -14,19 +15,46 @@ export default function ParticipantPage() {
   const [code, setCode] = useState("");
   const [event, setEvent] = useState(null);
 
-  async function lookup() {
+  const [isScanning, setIsScanning] = useState(false);
+  const videoRef = useRef(null);
+  const scannerControlsRef = useRef(null);
+
+  const scanner = useMemo(() => new BrowserQRCodeReader(), []);
+
+  function stopScanner() {
+    try {
+      scannerControlsRef.current?.stop?.();
+    } catch {
+      // ignore
+    }
+    scannerControlsRef.current = null;
+  }
+
+  useEffect(() => {
+    return () => {
+      stopScanner();
+    };
+  }, []);
+
+  async function lookupByCode(codeValue) {
     setEvent(null);
 
-    const trimmed = code.trim().toUpperCase();
+    const trimmed = String(codeValue || "")
+      .trim()
+      .toUpperCase();
     if (!trimmed) return;
 
     try {
       const data = await eventService.getEventByCode(trimmed);
       setEvent(data.event);
       showToast("Event loaded", "success");
-    } catch (e) {
+    } catch {
       showToast("Lookup failed", "error");
     }
+  }
+
+  async function lookup() {
+    await lookupByCode(code);
   }
 
   async function checkIn() {
@@ -37,7 +65,7 @@ export default function ParticipantPage() {
       const data = await attendanceService.checkIn(trimmed);
       showToast(data.message || "Checked in", "success");
       await lookup();
-    } catch (e) {
+    } catch {
       showToast("Check-in failed", "error");
     }
   }
@@ -45,6 +73,54 @@ export default function ParticipantPage() {
   const displayName = [user?.firstName, user?.lastName]
     .filter(Boolean)
     .join(" ");
+
+  async function startScan() {
+    if (isScanning) return;
+    setEvent(null);
+    setIsScanning(true);
+
+    try {
+      stopScanner();
+
+      const videoEl = videoRef.current;
+      if (!videoEl) {
+        showToast("Scanner not ready", "error");
+        setIsScanning(false);
+        return;
+      }
+
+      const controls = await scanner.decodeFromVideoDevice(
+        undefined,
+        videoEl,
+        async (result) => {
+          if (!result) return;
+          const text = String(result.getText?.() ?? "")
+            .trim()
+            .toUpperCase();
+          if (!text) return;
+
+          stopScanner();
+          setIsScanning(false);
+          setCode(text);
+          await lookupByCode(text);
+        }
+      );
+
+      scannerControlsRef.current = controls;
+    } catch {
+      stopScanner();
+      setIsScanning(false);
+      showToast(
+        "Camera access failed (try HTTPS or allow permissions)",
+        "error"
+      );
+    }
+  }
+
+  function cancelScan() {
+    stopScanner();
+    setIsScanning(false);
+  }
 
   return (
     <div className="page">
@@ -69,6 +145,7 @@ export default function ParticipantPage() {
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="ex: X9TRP2"
+                disabled={isScanning}
               />
             </Field>
 
@@ -84,7 +161,29 @@ export default function ParticipantPage() {
               >
                 Check in
               </Button>
+              <Button type="button" onClick={startScan} disabled={isScanning}>
+                Scan QR code
+              </Button>
+              {isScanning ? (
+                <Button type="button" variant="danger" onClick={cancelScan}>
+                  Cancel
+                </Button>
+              ) : null}
             </div>
+
+            {isScanning ? (
+              <div className="event-preview">
+                <div className="muted" style={{ marginBottom: 8 }}>
+                  Point your camera at the QR code.
+                </div>
+                <video
+                  ref={videoRef}
+                  style={{ width: "100%", borderRadius: 12 }}
+                  muted
+                  playsInline
+                />
+              </div>
+            ) : null}
 
             {event ? (
               <div className="event-preview">

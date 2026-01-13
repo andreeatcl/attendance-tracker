@@ -41,6 +41,33 @@ export default function OrganizerPage() {
   const [eventTime, setEventTime] = useState("");
   const [eventDuration, setEventDuration] = useState("60");
 
+  function normalizeAsciiLettersOnly(value) {
+    const s = String(value || "");
+    const withoutDiacritics = s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    return withoutDiacritics.replace(/[^A-Za-z]/g, "");
+  }
+
+  function digitsOnly(value) {
+    return String(value || "").replace(/\D/g, "");
+  }
+
+  function buildEventExportFilename(event, ext) {
+    const safeExt = String(ext || "").replace(/^\./, "");
+    const name = normalizeAsciiLettersOnly(event?.name) || "event";
+    const date = digitsOnly(toDateOnlyString(event?.startTime));
+    const time = digitsOnly(formatTime(event?.startTime));
+    const parts = [name, date, time, "participants"].filter(Boolean);
+    return `${parts.join("_")}.${safeExt}`;
+  }
+
+  function buildGroupExportFilename(group, ext) {
+    const safeExt = String(ext || "").replace(/^\./, "");
+    const name = normalizeAsciiLettersOnly(group?.name) || "group";
+    return `${name}_participants.${safeExt}`;
+  }
+
   async function refreshGroups() {
     const data = await groupService.listGroups();
     setGroups(data.groups || []);
@@ -82,7 +109,7 @@ export default function OrganizerPage() {
         if (nextEvents && nextEvents.length) {
           setSelectedEventId(String(nextEvents[0].id));
         }
-      } catch (e) {
+      } catch {
         if (cancelled) return;
         showToast("Failed to load events", "error");
       }
@@ -158,7 +185,7 @@ export default function OrganizerPage() {
         }
       }
       showToast("Group created", "success");
-    } catch (e) {
+    } catch {
       showToast("Failed to create group", "error");
     }
   }
@@ -197,7 +224,7 @@ export default function OrganizerPage() {
       setEventTime("");
       await refreshEvents(selectedGroupId);
       showToast("Event created", "success");
-    } catch (e) {
+    } catch {
       showToast("Failed to create event", "error");
     }
   }
@@ -227,7 +254,7 @@ export default function OrganizerPage() {
         setSelectedEventId(String(nextEvents[0].id));
       }
       showToast("Schedule saved", "success");
-    } catch (e) {
+    } catch {
       showToast("Failed to save schedule", "error");
     }
   }
@@ -250,7 +277,7 @@ export default function OrganizerPage() {
       }
 
       showToast("Event deleted", "success");
-    } catch (e) {
+    } catch {
       showToast("Failed to delete event", "error");
     }
   }
@@ -273,7 +300,7 @@ export default function OrganizerPage() {
       setAttendance([]);
 
       showToast("Event group deleted", "success");
-    } catch (e) {
+    } catch {
       showToast("Failed to delete group", "error");
     }
   }
@@ -283,7 +310,7 @@ export default function OrganizerPage() {
     try {
       await refreshAttendance(selectedEventId);
       showToast("Attendance refreshed", "info");
-    } catch (e) {
+    } catch {
       showToast("Failed to refresh attendance", "error");
     }
   }
@@ -303,7 +330,7 @@ export default function OrganizerPage() {
         }
       }
       showToast("Session refreshed", "info");
-    } catch (e) {
+    } catch {
       showToast("Failed to refresh session", "error");
     }
   }
@@ -319,12 +346,12 @@ export default function OrganizerPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `group_${selectedGroupId}_participants.csv`;
+      a.download = buildGroupExportFilename(selectedGroup, "csv");
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (e) {
+    } catch {
       showToast("Failed to export CSV", "error");
     }
   }
@@ -336,12 +363,12 @@ export default function OrganizerPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `event_${selectedEventId}_participants.csv`;
+      a.download = buildEventExportFilename(selectedEvent, "csv");
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (e) {
+    } catch {
       showToast("Failed to export CSV", "error");
     }
   }
@@ -353,12 +380,12 @@ export default function OrganizerPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `group_${selectedGroupId}_participants.xlsx`;
+      a.download = buildGroupExportFilename(selectedGroup, "xlsx");
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (e) {
+    } catch {
       showToast("Failed to export XLSX", "error");
     }
   }
@@ -370,12 +397,12 @@ export default function OrganizerPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `event_${selectedEventId}_participants.xlsx`;
+      a.download = buildEventExportFilename(selectedEvent, "xlsx");
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (e) {
+    } catch {
       showToast("Failed to export XLSX", "error");
     }
   }
@@ -545,10 +572,18 @@ export default function OrganizerPage() {
                   <div
                     style={{ display: "flex", gap: 8, alignItems: "center" }}
                   >
-                    <Button className="btn-colored" type="button" onClick={handleExportGroupCSV}>
+                    <Button
+                      className="btn-colored"
+                      type="button"
+                      onClick={handleExportGroupCSV}
+                    >
                       CSV
                     </Button>
-                    <Button className="btn-colored" type="button" onClick={handleExportGroupXLSX}>
+                    <Button
+                      className="btn-colored"
+                      type="button"
+                      onClick={handleExportGroupXLSX}
+                    >
                       XLSX
                     </Button>
                     <Button
@@ -695,26 +730,62 @@ export default function OrganizerPage() {
                 <Button
                   className="nav-logout"
                   type="button"
-                  onClick={() => setShowQr((v) => !v)}
+                  onClick={() => setShowQr(true)}
                   disabled={!selectedEvent.qrCode}
                 >
-                  {showQr ? "Hide QR" : "Show QR"}
+                  Show QR
                 </Button>
               </div>
-              {showQr && selectedEvent.qrCode && (
-                <div style={{ margin: '16px 0', textAlign: 'center' }}>
-                  <img
-                    src={selectedEvent.qrCode}
-                    alt="QR code for event access"
-                    style={{ width: 180, height: 180 }}
-                  />
-                  <div className="muted" style={{ marginTop: 4 }}>
-                    Scan for access code
+              {showQr && selectedEvent.qrCode ? (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 16,
+                    background: "var(--muted-transparent)",
+                    zIndex: 60,
+                  }}
+                >
+                  <div
+                    className="card"
+                    style={{
+                      width: "min(520px, 100%)",
+                      margin: 0,
+                      textAlign: "center",
+                    }}
+                  >
+                    <div className="card-title">Event access</div>
+                    <div className="code-box" style={{ marginTop: 8 }}>
+                      {selectedEvent.accessCode}
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <img
+                        src={selectedEvent.qrCode}
+                        alt="QR code for event access"
+                        style={{ width: 320, height: 320, maxWidth: "100%" }}
+                      />
+                    </div>
+                    <div className="row" style={{ marginTop: 12 }}>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={() => setShowQr(false)}
+                        style={{ width: "100%" }}
+                      >
+                        Close
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              )}
+              ) : null}
               <div className="muted">
-                Start: {formatDateTime(selectedEvent.startTime)} · Duration: {selectedEvent.duration} min
+                Start: {formatDateTime(selectedEvent.startTime)} · Duration:{" "}
+                {selectedEvent.duration} min
               </div>
             </div>
 
@@ -725,10 +796,18 @@ export default function OrganizerPage() {
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <span className="muted">Export attendance for event:</span>
-                  <Button className="btn-colored" type="button" onClick={handleExportEventCSV}>
+                  <Button
+                    className="btn-colored"
+                    type="button"
+                    onClick={handleExportEventCSV}
+                  >
                     CSV
                   </Button>
-                  <Button className="btn-colored" type="button" onClick={handleExportEventXLSX}>
+                  <Button
+                    className="btn-colored"
+                    type="button"
+                    onClick={handleExportEventXLSX}
+                  >
                     XLSX
                   </Button>
                   <Button

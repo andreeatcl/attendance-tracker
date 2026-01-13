@@ -11,15 +11,17 @@ Under construction!
 - added recurring events
 - UI looks nice + added favicon
 - toasts work
-
-# To do:
-
 - implement qr code feature
 - add export features - csv/xlsx - currently buttons have no functionality
 - final code review + refactoring
+
+# To do:
+
+- deploy
 - create structured README
 
 ### Current app
+
 <img width="1877" height="1077" alt="attendance_tracker" src="https://github.com/user-attachments/assets/e46f636d-8bde-4e83-84fc-91707942f095" />
 
 ### How to Run

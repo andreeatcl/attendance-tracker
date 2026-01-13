@@ -10,7 +10,12 @@ function authRequired(req, res, next) {
 
   const token = header.slice("Bearer ".length);
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || "no_jwt_token");
+    const secret = String(process.env.JWT_SECRET || "").trim();
+    if (!secret) {
+      return res.status(500).json({ message: "Server misconfigured" });
+    }
+
+    const payload = jwt.verify(token, secret);
     req.user = payload;
     return next();
   } catch {
