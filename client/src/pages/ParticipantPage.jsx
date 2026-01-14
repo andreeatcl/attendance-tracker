@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BrowserQRCodeReader } from "@zxing/browser";
+import { useEffect, useState } from "react";
+import { Html5QrcodeScanner } from "html5-qrcode";
 import Button from "../components/ui/Button";
 import Field from "../components/ui/Field";
 import { useAuth } from "../context/AuthContext";
@@ -15,26 +15,7 @@ export default function ParticipantPage() {
   const [code, setCode] = useState("");
   const [event, setEvent] = useState(null);
 
-  const [isScanning, setIsScanning] = useState(false);
-  const videoRef = useRef(null);
-  const scannerControlsRef = useRef(null);
-
-  const scanner = useMemo(() => new BrowserQRCodeReader(), []);
-
-  function stopScanner() {
-    try {
-      scannerControlsRef.current?.stop?.();
-    } catch {
-      // ignore
-    }
-    scannerControlsRef.current = null;
-  }
-
-  useEffect(() => {
-    return () => {
-      stopScanner();
-    };
-  }, []);
+  const [showQR, setShowQR] = useState(false);
 
   async function lookupByCode(codeValue) {
     setEvent(null);
@@ -57,8 +38,9 @@ export default function ParticipantPage() {
     await lookupByCode(code);
   }
 
-  async function checkIn() {
-    const trimmed = code.trim().toUpperCase();
+  async function checkIn(customCode) {
+    const usedCode = typeof customCode === "string" ? customCode : code;
+    const trimmed = usedCode.trim().toUpperCase();
     if (!trimmed) return;
 
     try {
@@ -74,53 +56,51 @@ export default function ParticipantPage() {
     .filter(Boolean)
     .join(" ");
 
-  async function startScan() {
-    if (isScanning) return;
+  async function lookupByQR(qrText) {
+    const trimmed = String(qrText || "")
+      .trim()
+      .toUpperCase();
+    if (!trimmed) return;
+
     setEvent(null);
-    setIsScanning(true);
+    setCode(trimmed);
 
     try {
-      stopScanner();
-
-      const videoEl = videoRef.current;
-      if (!videoEl) {
-        showToast("Scanner not ready", "error");
-        setIsScanning(false);
-        return;
-      }
-
-      const controls = await scanner.decodeFromVideoDevice(
-        undefined,
-        videoEl,
-        async (result) => {
-          if (!result) return;
-          const text = String(result.getText?.() ?? "")
-            .trim()
-            .toUpperCase();
-          if (!text) return;
-
-          stopScanner();
-          setIsScanning(false);
-          setCode(text);
-          await lookupByCode(text);
-        }
-      );
-
-      scannerControlsRef.current = controls;
+      const data = await eventService.getEventByCode(trimmed);
+      setEvent(data.event);
+      showToast("Event loaded from QR", "success");
     } catch {
-      stopScanner();
-      setIsScanning(false);
-      showToast(
-        "Camera access failed (try HTTPS or allow permissions)",
-        "error"
-      );
+      showToast("QR lookup failed", "error");
     }
   }
 
-  function cancelScan() {
-    stopScanner();
-    setIsScanning(false);
-  }
+  useEffect(() => {
+    if (!showQR) return;
+
+    const scanner = new Html5QrcodeScanner(
+      "qr-reader",
+      { fps: 10, qrbox: 250 },
+      false
+    );
+
+    scanner.render(
+      async (decodedText) => {
+        const text = String(decodedText || "")
+          .trim()
+          .toUpperCase();
+        if (!text) return;
+        setShowQR(false);
+        setCode(text);
+        await lookupByQR(text);
+        scanner.clear();
+      },
+      () => {}
+    );
+
+    return () => {
+      scanner.clear().catch(() => {});
+    };
+  }, [showQR]);
 
   return (
     <div className="page">
@@ -145,7 +125,6 @@ export default function ParticipantPage() {
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="ex: X9TRP2"
-                disabled={isScanning}
               />
             </Field>
 
@@ -156,34 +135,19 @@ export default function ParticipantPage() {
               <Button
                 type="button"
                 variant="primary"
-                onClick={checkIn}
+                onClick={() => checkIn()}
                 disabled={!code.trim() || !event?.isOpen || event?.checkedIn}
               >
                 Check in
               </Button>
-              <Button type="button" onClick={startScan} disabled={isScanning}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowQR(true)}
+              >
                 Scan QR code
               </Button>
-              {isScanning ? (
-                <Button type="button" variant="danger" onClick={cancelScan}>
-                  Cancel
-                </Button>
-              ) : null}
             </div>
-
-            {isScanning ? (
-              <div className="event-preview">
-                <div className="muted" style={{ marginBottom: 8 }}>
-                  Point your camera at the QR code.
-                </div>
-                <video
-                  ref={videoRef}
-                  style={{ width: "100%", borderRadius: 12 }}
-                  muted
-                  playsInline
-                />
-              </div>
-            ) : null}
 
             {event ? (
               <div className="event-preview">
@@ -207,6 +171,48 @@ export default function ParticipantPage() {
                 <div className="muted">
                   Start: {formatDateTime(event.startTime)} · Duration:{" "}
                   {event.duration} min
+                </div>
+              </div>
+            ) : null}
+
+            {showQR ? (
+              <div
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  width: "100vw",
+                  height: "100vh",
+                  background: "rgba(0,0,0,0.6)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 1000,
+                }}
+              >
+                <div
+                  style={{
+                    background: "#fff",
+                    padding: 24,
+                    borderRadius: 8,
+                    maxWidth: 350,
+                    width: "100%",
+                  }}
+                >
+                  <div style={{ marginBottom: 12, fontWeight: 600 }}>
+                    Scan QR Code
+                  </div>
+
+                  <div id="qr-reader" style={{ width: "100%" }} />
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setShowQR(false)}
+                    style={{ marginTop: 12 }}
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
             ) : null}

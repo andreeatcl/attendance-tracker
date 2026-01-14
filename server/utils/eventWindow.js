@@ -5,6 +5,11 @@ function parseStartTime(value) {
   const raw = String(value || "").trim();
   if (!raw) return new Date(NaN);
 
+  // ISO with timezone (Z or +02:00 etc) -> let JS interpret it as an absolute time
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(raw)) {
+    return new Date(raw);
+  }
+
   const m = raw.match(
     /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/
   );
