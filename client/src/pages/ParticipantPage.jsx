@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Html5QrcodeScanner } from "html5-qrcode";
+import { useEffect } from "react";
 import Button from "../components/ui/Button";
 import Field from "../components/ui/Field";
 import { useAuth } from "../context/AuthContext";
@@ -13,6 +15,7 @@ export default function ParticipantPage() {
 
   const [code, setCode] = useState("");
   const [event, setEvent] = useState(null);
+  const [showQR, setShowQR] = useState(false); // pentru modal scanare QR
 
   async function lookup() {
     setEvent(null);
@@ -29,8 +32,9 @@ export default function ParticipantPage() {
     }
   }
 
-  async function checkIn() {
-    const trimmed = code.trim().toUpperCase();
+  async function checkIn(customCode) {
+    const usedCode = typeof customCode === "string" ? customCode : code;
+    const trimmed = usedCode.trim().toUpperCase();
     if (!trimmed) return;
 
     try {
@@ -41,6 +45,46 @@ export default function ParticipantPage() {
       showToast("Check-in failed", "error");
     }
   }
+
+// Căutare automată după scanare QR
+  async function lookupByQR(qrText) {
+    const trimmed = String(qrText || "").trim().toUpperCase();
+    if (!trimmed) return;
+    setEvent(null);
+    setCode(trimmed); // sincronizează codul scanat cu inputul
+    try {
+      const data = await eventService.getEventByCode(trimmed);
+      setEvent(data.event);
+      showToast("Event loaded from QR", "success");
+    } catch (e) {
+      showToast("QR lookup failed", "error");
+    }
+  }
+
+  useEffect(() => {
+  if (!showQR) return;
+
+  const scanner = new Html5QrcodeScanner(
+    "qr-reader",
+    { fps: 10, qrbox: 250 },
+    false
+  );
+
+  scanner.render(
+    async (decodedText) => {
+      setCode(decodedText.toUpperCase());
+      setShowQR(false);
+      await lookupByQR(decodedText);
+      scanner.clear();
+    },
+    () => {}
+  );
+
+  return () => {
+    scanner.clear().catch(() => {});
+  };
+}, [showQR]);
+
 
   const displayName = [user?.firstName, user?.lastName]
     .filter(Boolean)
@@ -60,6 +104,7 @@ export default function ParticipantPage() {
           <div className="card-title">Check in</div>
 
           <div className="stack">
+
             <Field
               label="Event code"
               hint="Ask your organizer for the 6-character code."
@@ -72,6 +117,10 @@ export default function ParticipantPage() {
               />
             </Field>
 
+            <Button type="button" variant="secondary" onClick={() => setShowQR(true)}>
+              Scan QR
+            </Button>
+
             <div className="row">
               <Button type="button" onClick={lookup} disabled={!code.trim()}>
                 Lookup
@@ -79,7 +128,7 @@ export default function ParticipantPage() {
               <Button
                 type="button"
                 variant="primary"
-                onClick={checkIn}
+                onClick={() => checkIn()}
                 disabled={!code.trim() || !event?.isOpen || event?.checkedIn}
               >
                 Check in
@@ -113,6 +162,32 @@ export default function ParticipantPage() {
             ) : null}
           </div>
         </div>
+
+        {/* Modal scanare QR */}
+        {showQR && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000
+          }}>
+            <div style={{ background: "#fff", padding: 24, borderRadius: 8, maxWidth: 350 }}>
+              <div style={{ marginBottom: 12, fontWeight: 600 }}>Scan QR Code</div>
+              
+              <div id="qr-reader" style={{ width: "100%" }} />
+
+              <Button type="button" variant="secondary" onClick={() => setShowQR(false)} style={{ marginTop: 12 }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
